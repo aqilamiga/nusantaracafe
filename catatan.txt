@@ -1,0 +1,37 @@
+di 1 nusantara cafe, hampir tiap sore ada event. ini cafe banyak potensi karena belum banyak cafe yang
+konsepnya seperti 1 nusantara cafe. so, i wanna build a app-based website for this cafe.
+
+kenapa website? karena jika aku membuat aplikasi, maka aku harus membuat koding yang berbeda untuk tiap device.
+selain itu, inisiasi ini terinspirasi dari website pemesanan di mie gacoan, yang mana mereka pakai firebase
+untuk memesan makanan, and i think it's very easy to use.
+
+beberapa bulan yang lalu, aku sempat ngomong sama pengurus cafe itu, mereka sedang butuh aplikasi yang
+bisa juga mendata inventaris (bahan makanan, menu, dll). sedangkan yang pengen aku buat itu hanya untuk
+ke user(pembeli, customer). sebuah tantangan bagiku, tapi im gonna do it no matter what lmaooo.
+
+siapa saja yang akan menggunakan website ini?
+1. guest(customer, pengunjung, pembeli, dan sejenis)
+	- hanya bisa melihat menu. jika ingin memesan, buat akun terlebih dahulu agar tidak ada fake order
+	- hanya bisa melihat apa saja event yang akan datang.
+	- fitur lain mungkin bisa didiskusikan.
+
+2. user (customer, pengunjung, pembeli yang sudah punya akun)
+	- bisa memesan makanan tanpa perlu ke kasir.
+	- bisa melihat apa saja event yang akan datang, dan daftar jika ingin ikut serta dalam event tersebut.
+	- fitur lain mungkin bisa didiskusikan.
+
+3. admin kasir
+	- buat pesanan dari order user
+	- pemesanan bisa menggunakan API payment.
+	- buat event dari template yang disediakan.
+	- fitur lain mungkin bisa didiskusikan.
+
+4. admin dapur
+	- mendata inventaris bahan dapur
+	- bisa lihat barang apa yang tinggal sedikit
+	- fitur lain mungkin bisa didiskusikan.
+
+setelah membahas database dan UX, didapatkan kesimpulan:
+1. menggunakan firebase
+2. tetap dalam bentuk website
+3. hosting ke cpanel dan buat domain sendiri
