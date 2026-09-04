@@ -35,3 +35,7 @@ setelah membahas database dan UX, didapatkan kesimpulan:
 1. menggunakan firebase
 2. tetap dalam bentuk website
 3. hosting ke cpanel dan buat domain sendiri
+
+saat orang masuk ke website, status mereka adalah guest.
+jika ingin pesan sesuatu atau ikut event, baru diarahkan ke authpage
+untuk berpartisipasi.

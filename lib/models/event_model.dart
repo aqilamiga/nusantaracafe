@@ -5,29 +5,26 @@ class EventModel {
   final String title;
   final String description;
   final DateTime date;
-  final int quota;
+  final int maxQuota; // <-- Pastikan properti ini bernama maxQuota
   final int registeredUsersCount;
-  final String imageUrl;
 
   EventModel({
     required this.id,
     required this.title,
     required this.description,
     required this.date,
-    required this.quota,
+    required this.maxQuota,
     required this.registeredUsersCount,
-    required this.imageUrl,
   });
 
-  factory EventModel.fromMap(Map<String, dynamic> map, String id) {
+  factory EventModel.fromMap(Map<String, dynamic> map, String docId) {
     return EventModel(
-      id: id,
+      id: docId,
       title: map['title'] ?? '',
       description: map['description'] ?? '',
-      date: (map['date'] as Timestamp).toDate(),
-      quota: map['quota'] ?? 0,
+      date: (map['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      maxQuota: map['maxQuota'] ?? map['quota'] ?? 0, // Fallback jika di Firestore dinamai quota
       registeredUsersCount: map['registeredUsersCount'] ?? 0,
-      imageUrl: map['imageUrl'] ?? '',
     );
   }
 
@@ -36,9 +33,8 @@ class EventModel {
       'title': title,
       'description': description,
       'date': Timestamp.fromDate(date),
-      'quota': quota,
+      'maxQuota': maxQuota,
       'registeredUsersCount': registeredUsersCount,
-      'imageUrl': imageUrl,
     };
   }
 }
