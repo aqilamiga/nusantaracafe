@@ -63,42 +63,42 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(widget.isGuest
-              ? '1 Nusantara Cafe'
-              : 'Halo, ${widget.userData?.name ?? "Pelanggan"}'),
-          backgroundColor: Colors.brown,
-          foregroundColor: Colors.white,
-          actions: [
-            if (widget.isGuest)
-              TextButton.icon(
-                icon: const Icon(Icons.login, color: Colors.white),
-                label: const Text('Masuk', style: TextStyle(color: Colors.white)),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const AuthPage()),
-                  );
-                },
-              )
-            else
-              IconButton(
-                icon: const Icon(Icons.logout),
-                tooltip: 'Keluar',
-                onPressed: () async {
-                  await _authService.logout();
-                },
-              ),
-          ],
-          bottom: const TabBar(
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            indicatorColor: Colors.amber,
-            tabs: [
-              Tab(icon: Icon(Icons.restaurant_menu), text: 'Daftar Menu'),
-              Tab(icon: Icon(Icons.event), text: 'Event Cafe'),
-            ],
-          ),
-        ),
+  title: Text(
+    widget.isGuest
+        ? '1 Nusantara Cafe'
+        : 'Halo, ${widget.userData?.name ?? "Pelanggan"}',
+  ),
+  backgroundColor: Colors.brown,
+  foregroundColor: Colors.white,
+  actions: [
+    if (widget.isGuest)
+      // Tombol Masuk untuk Guest
+      TextButton.icon(
+        icon: const Icon(Icons.login, color: Colors.white),
+        label: const Text('Masuk', style: TextStyle(color: Colors.white)),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const AuthPage()),
+          );
+        },
+      )
+    else
+      // Tombol LOGOUT untuk User yang Sudah Login
+      IconButton(
+        icon: const Icon(Icons.logout),
+        tooltip: 'Keluar Akun',
+        onPressed: () async {
+          await _authService.logout();
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Berhasil keluar akun.')),
+            );
+          }
+        },
+      ),
+  ],
+),
         body: TabBarView(
           children: [
             // TAB 1: DAFTAR MENU

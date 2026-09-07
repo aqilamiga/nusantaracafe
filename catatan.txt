@@ -39,3 +39,19 @@ setelah membahas database dan UX, didapatkan kesimpulan:
 saat orang masuk ke website, status mereka adalah guest.
 jika ingin pesan sesuatu atau ikut event, baru diarahkan ke authpage
 untuk berpartisipasi.
+
+fitur: jika user signed for event, maka dikirim notif reminder untuk event tersebut
+but how?
+
+saat kasir buat event, web akan generate link yang nantinya jam/agenda ditambahkan ke google calendar.
+
+1. fix role pada admin kasir
+2. ganti penggunaan email -> nickname sunset english club
+3. tambah event melalui role kasir, auto-generate link "add to calendar" sebagai reminder
+4. tambah makanan/minuman melalui role kasir, tambah detail kebutuhan bahan dasar.
+5. saat masuk admin dapur, tambah alert: rotate phone for best experience
+6. add spesifikasi bahan makanan: kg, g/gr, mL, L, bungkus, buah, dus, kaleng, botol,
+7. tambah inventaris bahan makanan sesuai spek, pertama kali masukkan bahan makanan pilihan satuan bisa di dropdown. namun jika bahan sudah ada sebelumnya, ada peringatan "bahan makanan telah ada" 
+8. setiap makanan/minuman yang dipesan, bahan makanan akan berkurang sesuai dengan kebutuhan makanan/minuman
+9. bahas tentang payment: apakah qris statis/dinamis
+10. sesuaikan ui/ux dengan yang ada di figma

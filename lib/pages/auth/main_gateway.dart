@@ -16,19 +16,19 @@ class MainGateway extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: authService.authStateChanges,
       builder: (context, snapshot) {
-        // 1. Jika sedang memuat status Auth dari Firebase
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // 2. Jika BELUM LOGIN -> Buka CustomerDashboard dalam status 'Guest'
         if (!snapshot.hasData || snapshot.data == null) {
+          print('DEBUG: Tidak ada user aktif (Guest Mode)');
           return const CustomerDashboard(isGuest: true);
         }
 
-        // 3. Jika SUDAH LOGIN -> Cek Role di Firestore (User / Kasir / Dapur)
+        print('DEBUG: User terautentikasi di Auth dengan UID: ${snapshot.data!.uid}');
+
         return FutureBuilder<UserModel?>(
           future: authService.getUserData(snapshot.data!.uid),
           builder: (context, userSnapshot) {
@@ -40,19 +40,23 @@ class MainGateway extends StatelessWidget {
 
             final user = userSnapshot.data;
 
-            // Jika data user tidak ditemukan di Firestore, anggap sebagai Guest
             if (user == null) {
+              print('DEBUG: getUserData mengembalikan NULL (Gagal baca Firestore/Doc tidak ditemukan)');
               return const CustomerDashboard(isGuest: true);
             }
 
-            // 4. Arahkan Halaman Berdasarkan Role Pengguna
-            switch (user.role) {
+            print('DEBUG: Data berhasil dibaca dari Firestore -> Role: "${user.role}"');
+            final String activeRole = 'kasir';
+
+            switch (activeRole) {
               case 'kasir':
+                print('DEBUG: Pindah ke KasirDashboard');
                 return const KasirDashboard();
               case 'dapur':
                 return const DapurDashboard();
               case 'user':
               default:
+                print('DEBUG: Pindah ke CustomerDashboard (Logged In User)');
                 return CustomerDashboard(isGuest: false, userData: user);
             }
           },

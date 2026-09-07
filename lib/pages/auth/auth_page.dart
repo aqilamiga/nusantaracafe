@@ -12,13 +12,22 @@ class _AuthPageState extends State<AuthPage> {
   final AuthService _authService = AuthService();
   final _formKey = GlobalKey<FormState>();
 
-  // Controller untuk menangkap input teks
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  bool _isLoginMode = true; // State untuk toggle antara Mode Login / Mode Register
-  bool _isLoading = false;  // State untuk indikator loading saat memproses
+  // Role default saat memilih dropdown
+  String _selectedRole = 'user';
+
+  // Daftar pilihan role untuk Dropdown
+  final List<Map<String, String>> _roleOptions = [
+    {'value': 'user', 'label': 'Customer / Pembeli'},
+    {'value': 'kasir', 'label': 'Kasir'},
+    {'value': 'dapur', 'label': 'Staf Dapur'},
+  ];
+
+  bool _isLoginMode = true;
+  bool _isLoading = false;
   bool _obscurePassword = true;
 
   @override
@@ -29,7 +38,6 @@ class _AuthPageState extends State<AuthPage> {
     super.dispose();
   }
 
-  // Fungsi untuk mengeksekusi Submit Form (Login / Register)
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -39,7 +47,6 @@ class _AuthPageState extends State<AuthPage> {
 
     try {
       if (_isLoginMode) {
-        // --- LOGIKA LOGIN ---
         await _authService.loginWithEmail(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
@@ -49,22 +56,33 @@ class _AuthPageState extends State<AuthPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Berhasil masuk!')),
           );
-          Navigator.pop(context); // Kembali ke halaman utama (MainGateway akan auto-route)
+          if (Navigator.canPop(context)) {
+            Navigator.pop(context);
+          }
         }
       } else {
-        // --- LOGIKA REGISTER ---
+        // Mengirim role yang dipilih dari Dropdown
         await _authService.registerWithEmail(
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
-          role: 'user', // Default role untuk pendaftar umum
+          role: _selectedRole, 
         );
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Akun berhasil dibuat! Selamat datang.')),
+            SnackBar(content: Text('Akun berhasil dibuat sebagai $_selectedRole!')),
           );
-          Navigator.pop(context); // Kembali ke halaman utama
+          
+          if (Navigator.canPop(context)) {
+            Navigator.pop(context);
+          } else {
+            setState(() {
+              _isLoginMode = true;
+              _nameController.clear();
+              _passwordController.clear();
+            });
+          }
         }
       }
     } catch (e) {
@@ -100,7 +118,6 @@ class _AuthPageState extends State<AuthPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Header Logo / Judul
                 Icon(
                   Icons.local_cafe_rounded,
                   size: 72,
@@ -130,6 +147,30 @@ class _AuthPageState extends State<AuthPage> {
                         return 'Silakan masukkan nama Anda';
                       }
                       return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Dropdown Pilihan Role
+                  DropdownButtonFormField<String>(
+                    value: _selectedRole,
+                    decoration: const InputDecoration(
+                      labelText: 'Pilih Role Akun',
+                      prefixIcon: Icon(Icons.badge_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _roleOptions.map((role) {
+                      return DropdownMenuItem<String>(
+                        value: role['value'],
+                        child: Text(role['label']!),
+                      );
+                    }).toList(),
+                    onChanged: (newValue) {
+                      if (newValue != null) {
+                        setState(() {
+                          _selectedRole = newValue;
+                        });
+                      }
                     },
                   ),
                   const SizedBox(height: 16),
@@ -187,7 +228,7 @@ class _AuthPageState extends State<AuthPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // Tombol Aksi (Submit)
+                // Tombol Submit
                 ElevatedButton(
                   onPressed: _isLoading ? null : _submitForm,
                   style: ElevatedButton.styleFrom(
@@ -206,7 +247,7 @@ class _AuthPageState extends State<AuthPage> {
                 ),
                 const SizedBox(height: 12),
 
-                // Toggle antara Login / Register
+                // Toggle Login / Register
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -217,6 +258,7 @@ class _AuthPageState extends State<AuthPage> {
                       onPressed: () {
                         setState(() {
                           _isLoginMode = !_isLoginMode;
+                          _isLoading = false;
                           _formKey.currentState?.reset();
                         });
                       },
