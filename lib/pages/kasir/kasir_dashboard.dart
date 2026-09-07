@@ -3,12 +3,42 @@ import '../../models/menu_model.dart';
 import '../../models/event_model.dart';
 import '../../services/database_service.dart';
 import '../../services/auth_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class KasirDashboard extends StatefulWidget {
   const KasirDashboard({super.key});
 
   @override
   State<KasirDashboard> createState() => _KasirDashboardState();
+}
+
+void openGoogleCalendar({
+  required String title,
+  required String description,
+  required DateTime startTime,
+  required DateTime endTime,
+}) async {
+  // Format DateTime ke ISO 8601 tanpa pemisah untuk Google Calendar API (YYYYMMDDTHHmmssZ)
+  String formatDateTime(DateTime dt) {
+    return dt.toUtc().toIso8601String().replaceAll(RegExp(r'[:-]|(\.\d+)'), '');
+  }
+
+  final String start = formatDateTime(startTime);
+  final String end = formatDateTime(endTime);
+
+  final Uri url = Uri.parse(
+    'https://calendar.google.com/calendar/render'
+    '?action=TEMPLATE'
+    '&text=${Uri.encodeComponent(title)}'
+    '&details=${Uri.encodeComponent(description)}'
+    '&dates=$start/$end',
+  );
+
+  if (await canLaunchUrl(url)) {
+    await launchUrl(url, mode: LaunchMode.externalApplication);
+  } else {
+    throw 'Tidak dapat membuka Google Calendar';
+  }
 }
 
 class _KasirDashboardState extends State<KasirDashboard> {
@@ -134,12 +164,14 @@ class _KasirDashboardState extends State<KasirDashboard> {
   // ==========================================
   // DIALOG 2: TAMBAH EVENT CAFE
   // ==========================================
-  void _showAddEventDialog() {
+void _showAddEventDialog() {
     final formKey = GlobalKey<FormState>();
     final titleController = TextEditingController();
     final descriptionController = TextEditingController();
     final quotaController = TextEditingController();
+
     DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
+    TimeOfDay selectedTime = const TimeOfDay(hour: 10, minute: 0);
 
     showDialog(
       context: context,
@@ -154,6 +186,7 @@ class _KasirDashboardState extends State<KasirDashboard> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // 1. INPUT JUDUL EVENT
                       TextFormField(
                         controller: titleController,
                         decoration: const InputDecoration(
@@ -164,6 +197,8 @@ class _KasirDashboardState extends State<KasirDashboard> {
                             v == null || v.isEmpty ? 'Wajib diisi' : null,
                       ),
                       const SizedBox(height: 12),
+
+                      // 2. INPUT DESKRIPSI EVENT
                       TextFormField(
                         controller: descriptionController,
                         maxLines: 3,
@@ -175,6 +210,8 @@ class _KasirDashboardState extends State<KasirDashboard> {
                             v == null || v.isEmpty ? 'Wajib diisi' : null,
                       ),
                       const SizedBox(height: 12),
+
+                      // 3. INPUT KUOTA PESERTA
                       TextFormField(
                         controller: quotaController,
                         keyboardType: TextInputType.number,
@@ -186,6 +223,8 @@ class _KasirDashboardState extends State<KasirDashboard> {
                             v == null || v.isEmpty ? 'Wajib diisi' : null,
                       ),
                       const SizedBox(height: 12),
+
+                      // 4. PILIH TANGGAL EVENT
                       ListTile(
                         shape: RoundedRectangleBorder(
                           side: const BorderSide(color: Colors.grey),
@@ -209,6 +248,28 @@ class _KasirDashboardState extends State<KasirDashboard> {
                           }
                         },
                       ),
+                      const SizedBox(height: 12),
+
+                      // 5. PILIH JAM & MENIT EVENT
+                      ListTile(
+                        shape: RoundedRectangleBorder(
+                          side: const BorderSide(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        title: Text(
+                          'Jam Event: ${selectedTime.format(context)}',
+                        ),
+                        trailing: const Icon(Icons.access_time),
+                        onTap: () async {
+                          final pickedTime = await showTimePicker(
+                            context: context,
+                            initialTime: selectedTime,
+                          );
+                          if (pickedTime != null) {
+                            setDialogState(() => selectedTime = pickedTime);
+                          }
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -221,11 +282,20 @@ class _KasirDashboardState extends State<KasirDashboard> {
                 ElevatedButton(
                   onPressed: () async {
                     if (formKey.currentState!.validate()) {
+                      // GABUNGKAN TANGGAL + JAM MENJADI SATU DATETIME
+                      final DateTime fullDateTime = DateTime(
+                        selectedDate.year,
+                        selectedDate.month,
+                        selectedDate.day,
+                        selectedTime.hour,
+                        selectedTime.minute,
+                      );
+
                       final newEvent = EventModel(
                         id: '',
                         title: titleController.text.trim(),
                         description: descriptionController.text.trim(),
-                        date: selectedDate,
+                        date: fullDateTime,
                         maxQuota: int.parse(quotaController.text.trim()),
                         registeredUsersCount: 0,
                       );
@@ -407,10 +477,33 @@ class _KasirDashboardState extends State<KasirDashboard> {
                   subtitle: Text(
                     '${event.description}\nTanggal: ${event.date.day}/${event.date.month}/${event.date.year}',
                   ),
-                  trailing: Chip(
-                    label: Text(
-                      '${event.registeredUsersCount}/${event.maxQuota} Peserta',
-                    ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // TOMBOL ADD TO CALENDAR
+                      IconButton(
+                        icon: const Icon(
+                          Icons.edit_calendar,
+                          color: Colors.brown,
+                        ),
+                        tooltip: 'Tambah ke Google Calendar',
+                        onPressed: () {
+                          openGoogleCalendar(
+                            title: event.title,
+                            description: event.description,
+                            startTime: event.date,
+                            endTime: event.date.add(
+                              const Duration(hours: 2),
+                            ), // Default durasi 2 jam
+                          );
+                        },
+                      ),
+                      Chip(
+                        label: Text(
+                          '${event.registeredUsersCount}/${event.maxQuota} Peserta',
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );

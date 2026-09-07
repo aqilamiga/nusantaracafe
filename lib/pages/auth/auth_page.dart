@@ -9,12 +9,12 @@ class AuthPage extends StatefulWidget {
 }
 
 class _AuthPageState extends State<AuthPage> {
-
-late final AuthService _authService;
+  late final AuthService _authService;
   final _formKey = GlobalKey<FormState>();
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   String _selectedRole = 'user';
@@ -24,7 +24,7 @@ late final AuthService _authService;
     {'value': 'kasir', 'label': 'Kasir'},
     {'value': 'dapur', 'label': 'Staf Dapur'},
   ];
-bool _isLoginMode = true;
+  bool _isLoginMode = true;
   bool _isLoading = false;
   bool _obscurePassword = true;
 
@@ -32,76 +32,74 @@ bool _isLoginMode = true;
   void initState() {
     super.initState();
     // 2. Inisialisasi AuthService aman di sini
-    _authService = AuthService(); 
+    _authService = AuthService();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-Future<void> _submitForm() async {
-  if (!_formKey.currentState!.validate()) return;
+  Future<void> _submitForm() async {
+    if (!_formKey.currentState!.validate()) return;
 
-  setState(() {
-    _isLoading = true;
-  });
+    setState(() {
+      _isLoading = true;
+    });
 
-  try {
-    if (_isLoginMode) {
-      // 1. PROSES LOGIN
-      await _authService.loginWithEmail(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Berhasil masuk!')),
+    try {
+      if (_isLoginMode) {
+        // LOGIN MENGGUNAKAN USERNAME
+        await _authService.loginWithUsername(
+          username: _usernameController.text.trim(),
+          password: _passwordController.text.trim(),
         );
 
-        // Hapus seluruh tumpukan halaman & lempar ke MainGateway (/)
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-      }
-    } else {
-      // 2. PROSES REGISTER
-      await _authService.registerWithEmail(
-        name: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-        role: _selectedRole, 
-      );
+        if (mounted) {
+          Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+        }
+      } else {
+        // REGISTER MENGGUNAKAN USERNAME SEBENARNYA
+        await _authService.registerWithEmail(
+          name: _nameController.text.trim(),
+          username: _usernameController.text.trim(), // Gunakan controller username khusus
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+          role: _selectedRole,
+        );
 
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Akun berhasil dibuat sebagai $_selectedRole!'),
+            ),
+          );
+          Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+        }
+      }
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Akun berhasil dibuat sebagai $_selectedRole!')),
+          SnackBar(
+            content: Text(
+              'Gagal: ${e.toString().replaceAll('Exception: ', '')}',
+            ),
+            backgroundColor: Colors.redAccent,
+          ),
         );
-        
-        // JANGAN GUNAKAN Navigator.pop(context)!
-        // Wajib bersihkan stack agar MainGateway melakukan evaluasi role baru dari awal.
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
-    }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal: ${e.toString()}'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    }
-  } finally {
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -128,13 +126,36 @@ Future<void> _submitForm() async {
                   '1 Nusantara Cafe',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 28),
+                TextFormField(
+                  controller: _usernameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nickname',
+                    prefixIcon: Icon(Icons.alternate_email_rounded),
+                    border: OutlineInputBorder(),
+                    hintText: 'contoh: kanyewestlover911',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Silakan masukkan username';
+                    }
+                    if (value.contains(' ')) {
+                      return 'Nickname tidak boleh mengandung spasi';
+                    }
+                    if (value.length < 4) {
+                      return 'Nickname minimal 4 karakter';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
 
-                // Field Nama Lengkap (Hanya tampil saat Register)
+                // 2. Field Khusus Pendaftaran (HANYA TAMPIL SAAT REGISTER)
                 if (!_isLoginMode) ...[
+                  // Input Nama Lengkap
                   TextFormField(
                     controller: _nameController,
                     decoration: const InputDecoration(
@@ -148,6 +169,21 @@ Future<void> _submitForm() async {
                       }
                       return null;
                     },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Input Email (DIPINDAHKAN KE SINI)
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      prefixIcon: Icon(Icons.email_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) => value == null || !value.contains('@')
+                        ? 'Email tidak valid'
+                        : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -176,28 +212,7 @@ Future<void> _submitForm() async {
                   const SizedBox(height: 16),
                 ],
 
-                // Field Email
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    prefixIcon: Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Silakan masukkan email Anda';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Format email tidak valid';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Field Password
+                // 3. Field Kata Sandi (Tampil di Mode Login & Register)
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
@@ -207,7 +222,9 @@ Future<void> _submitForm() async {
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                       ),
                       onPressed: () {
                         setState(() {
@@ -251,9 +268,9 @@ Future<void> _submitForm() async {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(_isLoginMode
-                        ? 'Belum punya akun?'
-                        : 'Sudah punya akun?'),
+                    Text(
+                      _isLoginMode ? 'Belum punya akun?' : 'Sudah punya akun?',
+                    ),
                     TextButton(
                       onPressed: () {
                         setState(() {

@@ -10,19 +10,37 @@ class AuthService {
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   // Login
-  Future<UserCredential?> loginWithEmail({
-    required String email,
-    required String password,
-  }) async {
-    return await _auth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
+Future<UserCredential?> loginWithUsername({
+  required String username,
+  required String password,
+}) async {
+  final cleanUsername = username.toLowerCase().trim();
+
+  // 1. Cari dokumen di Firestore berdasarkan username
+  QuerySnapshot query = await _firestore
+      .collection('users')
+      .where('username', isEqualTo: cleanUsername)
+      .limit(1)
+      .get();
+
+  if (query.docs.isEmpty) {
+    throw Exception('Username tidak ditemukan');
   }
+
+  // 2. Ambil email terikat
+  String email = query.docs.first.get('email');
+
+  // 3. Login ke Firebase Auth menggunakan email yang ditemukan
+  return await _auth.signInWithEmailAndPassword(
+    email: email,
+    password: password,
+  );
+}
 
   // Register
   Future<UserCredential?> registerWithEmail({
     required String name,
+    required String username,
     required String email,
     required String password,
     required String role,
@@ -32,10 +50,23 @@ class AuthService {
       password: password,
     );
 
+    final cleanUsername = username.toLowerCase().trim();
+
+    QuerySnapshot checkUsername = await _firestore
+      .collection('users')
+      .where('username', isEqualTo: cleanUsername)
+      .limit(1)
+      .get();
+
+  if (checkUsername.docs.isNotEmpty) {
+    throw Exception('Username "$cleanUsername" sudah digunakan, pilih username lain.');
+  }
+
     // Simpan data user ke Firestore
     await _firestore.collection('users').doc(userCredential.user!.uid).set({
       'uid': userCredential.user!.uid,
       'name': name,
+      'username': username.toLowerCase().trim(),
       'email': email,
       'role': role,
       'createdAt': FieldValue.serverTimestamp(),
