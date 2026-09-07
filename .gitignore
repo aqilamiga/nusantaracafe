@@ -46,8 +46,9 @@ app.*.map.json
 web_entrypoint.dart
 
 web/firebase-config.js
-
+lib/firebase_options.dart
 .env
 *.env
 # Widget Preview related
 .widget_preview/
+
