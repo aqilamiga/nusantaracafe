@@ -45,7 +45,7 @@ but how?
 
 saat kasir buat event, web akan generate link yang nantinya jam/agenda ditambahkan ke google calendar.
 
-1. fix role pada admin kasir
+1. fix role pada admin kasir✅
 2. ganti penggunaan email -> nickname sunset english club
 3. tambah event melalui role kasir, auto-generate link "add to calendar" sebagai reminder
 4. tambah makanan/minuman melalui role kasir, tambah detail kebutuhan bahan dasar.

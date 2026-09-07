@@ -2,35 +2,53 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
 import '../../models/user_model.dart';
+
+// Dashboard Halaman
 import '../customer/customer_dashboard.dart';
 import '../kasir/kasir_dashboard.dart';
 import '../dapur/dapur_dashboard.dart';
 
-class MainGateway extends StatelessWidget {
+class MainGateway extends StatefulWidget {
   const MainGateway({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final AuthService authService = AuthService();
+  State<MainGateway> createState() => _MainGatewayState();
+}
 
+class _MainGatewayState extends State<MainGateway> {
+  // Deklarasikan AuthService secara terisolasi di dalam State
+  late final AuthService _authService;
+
+  @override
+  void initState() {
+    super.initState();
+    _authService = AuthService();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      stream: authService.authStateChanges,
+      stream: _authService.authStateChanges,
       builder: (context, snapshot) {
+        // 1. Loading Koneksi Auth
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
+        // 2. Jika Belum Login -> Guest Mode
         if (!snapshot.hasData || snapshot.data == null) {
-          print('DEBUG: Tidak ada user aktif (Guest Mode)');
+          print('DEBUG MainGateway: User belum login -> CustomerDashboard (Guest)');
           return const CustomerDashboard(isGuest: true);
         }
 
-        print('DEBUG: User terautentikasi di Auth dengan UID: ${snapshot.data!.uid}');
+        // 3. Jika Sudah Login -> Ambil Data UserModel dari Firestore
+        final String uid = snapshot.data!.uid;
 
         return FutureBuilder<UserModel?>(
-          future: authService.getUserData(snapshot.data!.uid),
+          // Panggil fungsi getUserData dengan aman
+          future: _authService.getUserData(uid),
           builder: (context, userSnapshot) {
             if (userSnapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
@@ -38,25 +56,33 @@ class MainGateway extends StatelessWidget {
               );
             }
 
-            final user = userSnapshot.data;
+            final UserModel? user = userSnapshot.data;
 
+            // Jika Data Null -> Fallback ke Customer Mode
             if (user == null) {
-              print('DEBUG: getUserData mengembalikan NULL (Gagal baca Firestore/Doc tidak ditemukan)');
-              return const CustomerDashboard(isGuest: true);
+              print('DEBUG MainGateway: User Data NULL -> CustomerDashboard');
+              return const CustomerDashboard(isGuest: false);
             }
 
-            print('DEBUG: Data berhasil dibaca dari Firestore -> Role: "${user.role}"');
-            final String activeRole = 'kasir';
+            print('DEBUG MainGateway: Role Terdeteksi -> "${user.role}"');
 
-            switch (activeRole) {
+            // 4. Routing Berdasarkan Role
+            switch (user.role.toLowerCase().trim()) {
               case 'kasir':
-                print('DEBUG: Pindah ke KasirDashboard');
+                print('DEBUG MainGateway: Pindah ke KasirDashboard');
                 return const KasirDashboard();
+
               case 'dapur':
+                print('DEBUG MainGateway: Pindah ke DapurDashboard');
                 return const DapurDashboard();
+
+              case 'admin':
+                print('DEBUG MainGateway: Pindah ke KasirDashboard (Admin)');
+                return const KasirDashboard(); 
+
               case 'user':
               default:
-                print('DEBUG: Pindah ke CustomerDashboard (Logged In User)');
+                print('DEBUG MainGateway: Pindah ke CustomerDashboard');
                 return CustomerDashboard(isGuest: false, userData: user);
             }
           },

@@ -9,26 +9,31 @@ class AuthPage extends StatefulWidget {
 }
 
 class _AuthPageState extends State<AuthPage> {
-  final AuthService _authService = AuthService();
+
+late final AuthService _authService;
   final _formKey = GlobalKey<FormState>();
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  // Role default saat memilih dropdown
   String _selectedRole = 'user';
 
-  // Daftar pilihan role untuk Dropdown
   final List<Map<String, String>> _roleOptions = [
     {'value': 'user', 'label': 'Customer / Pembeli'},
     {'value': 'kasir', 'label': 'Kasir'},
     {'value': 'dapur', 'label': 'Staf Dapur'},
   ];
-
-  bool _isLoginMode = true;
+bool _isLoginMode = true;
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // 2. Inisialisasi AuthService aman di sini
+    _authService = AuthService(); 
+  }
 
   @override
   void dispose() {
@@ -38,70 +43,65 @@ class _AuthPageState extends State<AuthPage> {
     super.dispose();
   }
 
-  Future<void> _submitForm() async {
-    if (!_formKey.currentState!.validate()) return;
+Future<void> _submitForm() async {
+  if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+  setState(() {
+    _isLoading = true;
+  });
 
-    try {
-      if (_isLoginMode) {
-        await _authService.loginWithEmail(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
+  try {
+    if (_isLoginMode) {
+      // 1. PROSES LOGIN
+      await _authService.loginWithEmail(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Berhasil masuk!')),
-          );
-          if (Navigator.canPop(context)) {
-            Navigator.pop(context);
-          }
-        }
-      } else {
-        // Mengirim role yang dipilih dari Dropdown
-        await _authService.registerWithEmail(
-          name: _nameController.text.trim(),
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-          role: _selectedRole, 
-        );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Akun berhasil dibuat sebagai $_selectedRole!')),
-          );
-          
-          if (Navigator.canPop(context)) {
-            Navigator.pop(context);
-          } else {
-            setState(() {
-              _isLoginMode = true;
-              _nameController.clear();
-              _passwordController.clear();
-            });
-          }
-        }
-      }
-    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal: ${e.toString()}'),
-            backgroundColor: Colors.redAccent,
-          ),
+          const SnackBar(content: Text('Berhasil masuk!')),
         );
+
+        // Hapus seluruh tumpukan halaman & lempar ke MainGateway (/)
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
-    } finally {
+    } else {
+      // 2. PROSES REGISTER
+      await _authService.registerWithEmail(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+        role: _selectedRole, 
+      );
+
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Akun berhasil dibuat sebagai $_selectedRole!')),
+        );
+        
+        // JANGAN GUNAKAN Navigator.pop(context)!
+        // Wajib bersihkan stack agar MainGateway melakukan evaluasi role baru dari awal.
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal: ${e.toString()}'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
+}
 
   @override
   Widget build(BuildContext context) {

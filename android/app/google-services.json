@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "168920976692",
+    "project_id": "nusantara-deb00",
+    "storage_bucket": "nusantara-deb00.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:168920976692:android:baa7069e9d40aba6422961",
+        "android_client_info": {
+          "package_name": "com.example.testing"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA7qYvRYqglqVFLsBNpsedInXGiWBO-Qg4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

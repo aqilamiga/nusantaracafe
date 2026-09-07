@@ -2,32 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import 'firebase_options.dart'; 
 import 'pages/auth/main_gateway.dart';
 import 'pages/auth/auth_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  await dotenv.load(fileName: ".env");
-  
   await Firebase.initializeApp(
-    options: FirebaseOptions(
-      apiKey: dotenv.env['apiKey'] ?? '',
-      authDomain: dotenv.env['authDomain'] ?? '',
-      projectId: dotenv.env['projectId'] ?? '',
-      storageBucket: dotenv.env['storageBucket'] ?? '',
-      messagingSenderId: dotenv.env['messagingSenderId'] ?? '',
-      appId: dotenv.env['appId'] ?? '',
-    ),
+    options: DefaultFirebaseOptions.currentPlatform,
   );
+
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: false,
   );
 
   runApp(const CafeApp());
 }
+
 class CafeApp extends StatelessWidget {
   const CafeApp({super.key});
 
