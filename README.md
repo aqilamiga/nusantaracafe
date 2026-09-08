@@ -45,7 +45,7 @@ lib/
 │   ├── kasir/       # Dashboard Pengelolaan Menu & Event Kasir
 │   └── dapur/       # Dashboard Monitor Pesanan Dapur
 └── services/        # AuthService & DatabaseService (Firebase Firestore)
-
+```
 ## 🚀 Panduan Instalasi Lokal
 
 Jika Anda ingin menjalankan aplikasi ini di komputer lokal, ikuti langkah-langkah berikut:
