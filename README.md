@@ -52,7 +52,7 @@ Jika Anda ingin menjalankan aplikasi ini di komputer lokal, ikuti langkah-langka
 
 ### 1. Clone Repository
 ```bash
-git clone [https://github.com/username/nusantaracafe.git](https://github.com/username/nusantaracafe.git)
+git clone [https://github.com/aqilamiga/nusantaracafe.git](https://github.com/aqilamiga/nusantaracafe.git)
 cd nusantaracafe
 ```
 
