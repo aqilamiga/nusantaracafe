@@ -51,4 +51,5 @@ lib/firebase_options.dart
 *.env
 # Widget Preview related
 .widget_preview/
-
+catatan.txt
+reference.pdf
