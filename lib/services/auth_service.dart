@@ -89,7 +89,6 @@ Future<UserCredential?> loginWithUsername({
       }
       return null;
     } catch (e) {
-      print('DEBUG AuthService ERROR Sebenarnya: $e');
       return null;
     }
   }

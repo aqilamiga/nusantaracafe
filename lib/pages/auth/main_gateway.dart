@@ -39,7 +39,6 @@ class _MainGatewayState extends State<MainGateway> {
 
         // 2. Jika Belum Login -> Guest Mode
         if (!snapshot.hasData || snapshot.data == null) {
-          print('DEBUG MainGateway: User belum login -> CustomerDashboard (Guest)');
           return const CustomerDashboard(isGuest: true);
         }
 
@@ -60,7 +59,6 @@ class _MainGatewayState extends State<MainGateway> {
 
             // Jika Data Null -> Fallback ke Customer Mode
             if (user == null) {
-              print('DEBUG MainGateway: User Data NULL -> CustomerDashboard');
               return const CustomerDashboard(isGuest: false);
             }
 
@@ -69,20 +67,16 @@ class _MainGatewayState extends State<MainGateway> {
             // 4. Routing Berdasarkan Role
             switch (user.role.toLowerCase().trim()) {
               case 'kasir':
-                print('DEBUG MainGateway: Pindah ke KasirDashboard');
                 return const KasirDashboard();
 
               case 'dapur':
-                print('DEBUG MainGateway: Pindah ke DapurDashboard');
                 return const DapurDashboard();
 
               case 'admin':
-                print('DEBUG MainGateway: Pindah ke KasirDashboard (Admin)');
                 return const KasirDashboard(); 
 
               case 'user':
               default:
-                print('DEBUG MainGateway: Pindah ke CustomerDashboard');
                 return CustomerDashboard(isGuest: false, userData: user);
             }
           },
