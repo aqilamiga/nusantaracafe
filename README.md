@@ -45,14 +45,14 @@ lib/
 │   ├── kasir/       # Dashboard Pengelolaan Menu & Event Kasir
 │   └── dapur/       # Dashboard Monitor Pesanan Dapur
 └── services/        # AuthService & DatabaseService (Firebase Firestore)
-
+```
 ## 🚀 Panduan Instalasi Lokal
 
 Jika Anda ingin menjalankan aplikasi ini di komputer lokal, ikuti langkah-langkah berikut:
 
 ### 1. Clone Repository
 ```bash
-git clone [https://github.com/username/nusantaracafe.git](https://github.com/username/nusantaracafe.git)
+git clone [https://github.com/aqilamiga/nusantaracafe.git](https://github.com/aqilamiga/nusantaracafe.git)
 cd nusantaracafe
 ```
 
