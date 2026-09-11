@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/menu_model.dart';
 import '../models/event_model.dart';
 import '../models/ingredient_model.dart';
+import '../models/order_model.dart';
 
 class DatabaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -136,16 +137,15 @@ class DatabaseService {
   }
 
   // Stream Memantau Antrean Pesanan untuk Layar Dapur & Kasir
-  Stream<QuerySnapshot> getActiveOrders() {
-    return _firestore
-        .collection('orders')
-        .where('orderStatus', whereIn: ['cooking', 'ready'])
-        .orderBy(
-          'createdAt',
-          descending: false,
-        ) // Pesanan terlama di atas (FIFO)
-        .snapshots();
-  }
+Stream<List<OrderModel>> getActiveOrders() {
+  return _firestore
+      .collection('orders')
+      .where('status', whereIn: ['pending', 'diproses', 'siap'])
+      .snapshots()
+      .map((snapshot) => snapshot.docs
+          .map((doc) => OrderModel.fromFirestore(doc.data(), doc.id))
+          .toList());
+}
 
   // Stream Memantau Riwayat Pesanan Milik User Tertentu
   Stream<QuerySnapshot> getUserOrderHistory(String userId) {
@@ -257,60 +257,57 @@ class DatabaseService {
   }
 
   // Di dalam database_service.dart
-  Future<void> processOrderAndDeductStock(
-    String orderId,
-    List<Map<String, dynamic>> items,
-  ) async {
+Future<void> processOrderAndDeductStock(
+    String orderId, List<dynamic> rawItems) async {
+  try {
+    // Gunakan Transaction agar kalkulasi stok aman & atomic
     await _firestore.runTransaction((transaction) async {
-      for (var item in items) {
+      for (var rawItem in rawItems) {
+        final item = Map<String, dynamic>.from(rawItem as Map);
+        final String menuId = item['menuId'] ?? '';
+        final int quantityOrdered = (item['quantity'] as num?)?.toInt() ?? 1;
+
+        if (menuId.isEmpty) continue;
+
         // 1. Ambil data resep dari menu
         DocumentSnapshot menuDoc = await transaction.get(
-          _firestore.collection('menus').doc(item['menuId']),
+          _firestore.collection('menus').doc(menuId),
         );
 
-        List<dynamic> recipe = menuDoc.get('recipe') ?? [];
+        if (!menuDoc.exists) continue;
 
-        for (var ingredient in recipe) {
-          DocumentReference ingRef = _firestore
-              .collection('ingredients')
-              .doc(ingredient['ingredientId']);
+        final menuData = menuDoc.data() as Map<String, dynamic>?;
+        final List recipe = menuData?['recipe'] ?? [];
 
-          DocumentSnapshot ingSnap = await transaction.get(ingRef);
+        // 2. Kurangi setiap bahan baku sesuai resep
+        for (var recipeItem in recipe) {
+          final recipeMap = Map<String, dynamic>.from(recipeItem as Map);
+          final String ingredientId = recipeMap['ingredientId'] ?? '';
+          final double amountPerUnit = (recipeMap['amount'] as num?)?.toDouble() ?? 0.0;
+          final double totalAmountNeeded = amountPerUnit * quantityOrdered;
 
-          if (!ingSnap.exists) continue;
+          if (ingredientId.isEmpty) continue;
 
-          double currentStock = (ingSnap.get('stock') as num).toDouble();
-          String stockUnit = ingSnap.get('unit') ?? '';
+          DocumentReference ingredientRef =
+              _firestore.collection('ingredients').doc(ingredientId);
+          DocumentSnapshot ingredientDoc = await transaction.get(ingredientRef);
 
-          double recipeAmount = (ingredient['amountNeeded'] as num).toDouble();
-          String recipeUnit = ingredient['unit'] ?? '';
+          if (ingredientDoc.exists) {
+            final ingredientData = ingredientDoc.data() as Map<String, dynamic>?;
+            final double currentStock = (ingredientData?['stock'] as num?)?.toDouble() ?? 0.0;
 
-          // 2. KONVERSI SATUAN RESEP KE SATUAN STOK
-          double convertedAmountPerItem = convertToStockUnit(
-            recipeAmount: recipeAmount,
-            recipeUnit: recipeUnit,
-            stockUnit: stockUnit,
-          );
+            double newStock = currentStock - totalAmountNeeded;
+            if (newStock < 0) newStock = 0; // Cegah stok minus
 
-          // Hitung total pengurangan (kuantitas pesanan * bahan terkonversi)
-          double totalDeduction = convertedAmountPerItem * item['quantity'];
-
-          if (currentStock < totalDeduction) {
-            throw Exception(
-              'Stok ${ingSnap.get('displayName')} tidak mencukupi! (Sisa: $currentStock $stockUnit, Dibutuhkan: $totalDeduction $stockUnit)',
-            );
+            transaction.update(ingredientRef, {'stock': newStock});
           }
-
-          // 3. Potong stok bahan baku yang sudah terkonversi
-          transaction.update(ingRef, {'stock': currentStock - totalDeduction});
         }
       }
-
-      // Ubah status pesanan
-      DocumentReference orderRef = _firestore.collection('orders').doc(orderId);
-      transaction.update(orderRef, {'status': 'diproses'});
     });
+  } catch (e) {
+    rethrow; // Lempar error agar bisa ditangkap oleh try-catch UI
   }
+}
 
   // Stream untuk membaca daftar bahan makanan
   Stream<List<IngredientModel>> getIngredients() {
@@ -348,4 +345,5 @@ class DatabaseService {
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
+  
 }

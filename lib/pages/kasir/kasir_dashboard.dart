@@ -1,9 +1,11 @@
 // ignore_for_file: duplicate_ignore, use_build_context_synchronously
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/event_model.dart';
 import '../../services/database_service.dart';
 import '../../services/auth_service.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class KasirDashboard extends StatefulWidget {
   const KasirDashboard({super.key});
@@ -210,48 +212,150 @@ void _showAddEventDialog() {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Admin Kasir - Kelola Cafe'),
-          backgroundColor: Colors.brown,
-          foregroundColor: Colors.white,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.logout),
-              tooltip: 'Keluar',
-              onPressed: () async {
-                await _authService.logout();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Berhasil keluar dari akun Kasir.'),
-                    ),
-                  );
-                }
-              },
-            ),
-          ],
-          bottom: const TabBar(
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            indicatorColor: Colors.amber,
-            tabs: [
-              Tab(icon: Icon(Icons.event), text: 'Kelola Event'),
-            ],
+@override
+Widget build(BuildContext context) {
+  return DefaultTabController(
+    length: 2, // 1. Monitor Pesanan & Antar, 2. Kelola Event
+    child: Scaffold(
+      appBar: AppBar(
+        title: const Text('Admin Kasir - Kelola Cafe'),
+        backgroundColor: Colors.brown,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async => await _authService.logout(),
           ),
-        ),
-        body: TabBarView(
-          children: [
-            _buildManageEventTab(),
+        ],
+        bottom: const TabBar(
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.amber,
+          tabs: [
+            Tab(icon: Icon(Icons.receipt_long), text: 'Pesanan'),
+            Tab(icon: Icon(Icons.event), text: 'Kelola Event'),
           ],
         ),
       ),
-    );
-  }
+      body: TabBarView(
+        children: [
+          _buildKasirOrdersTab(), // Tab Monitor Pesanan Siap Antar
+          _buildManageEventTab(), // Tab Kelola Event
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _buildKasirOrdersTab() {
+  return StreamBuilder<QuerySnapshot>(
+    stream: FirebaseFirestore.instance
+        .collection('orders')
+        .where('orderStatus', whereIn: ['cooking', 'ready', 'completed'])
+        .orderBy('createdAt', descending: true)
+        .snapshots(),
+    builder: (context, snapshot) {
+      if (snapshot.hasError) {
+        return Center(child: Text('Error: ${snapshot.error}'));
+      }
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return const Center(child: CircularProgressIndicator());
+      }
+
+      final docs = snapshot.data?.docs ?? [];
+      if (docs.isEmpty) {
+        return const Center(child: Text('Belum ada pesanan masuk.'));
+      }
+
+      // Grouping berdasarkan tanggal
+      final Map<String, List<QueryDocumentSnapshot>> groupedOrders = {};
+
+      for (var doc in docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final Timestamp? timestamp = data['createdAt'] as Timestamp?;
+        final DateTime date = timestamp?.toDate() ?? DateTime.now();
+        final String dateKey = DateFormat('EEEE, dd MMMM yyyy', 'id_ID').format(date);
+
+        if (!groupedOrders.containsKey(dateKey)) {
+          groupedOrders[dateKey] = [];
+        }
+        groupedOrders[dateKey]!.add(doc);
+      }
+
+      final dateKeys = groupedOrders.keys.toList();
+
+      return ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: dateKeys.length,
+        itemBuilder: (context, dateIndex) {
+          final dateKey = dateKeys[dateIndex];
+          final ordersInDate = groupedOrders[dateKey]!;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Tanggal
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_month, size: 16, color: Colors.brown),
+                    const SizedBox(width: 8),
+                    Text(
+                      dateKey,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.brown,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ...ordersInDate.map((doc) {
+                final orderData = doc.data() as Map<String, dynamic>;
+                final String orderId = doc.id;
+                final String orderStatus = orderData['orderStatus'] ?? 'cooking';
+                final String tableNumber = orderData['tableNumber'] ?? '-';
+                final String userName = orderData['userName'] ?? 'Guest';
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    title: Text('Meja $tableNumber ($userName) - Rp ${orderData['totalPrice']}'),
+                    subtitle: Text('Status: ${orderStatus.toUpperCase()} • Payment: ${orderData['paymentMethod']}'),
+                    trailing: orderStatus == 'ready'
+                        ? ElevatedButton.icon(
+                            onPressed: () async {
+                              await FirebaseFirestore.instance
+                                  .collection('orders')
+                                  .doc(orderId)
+                                  .update({'orderStatus': 'completed'});
+                            },
+                            icon: const Icon(Icons.delivery_dining),
+                            label: const Text('Selesaikan / Diantar'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.brown,
+                              foregroundColor: Colors.white,
+                            ),
+                          )
+                        : Chip(
+                            label: Text(
+                              orderStatus == 'cooking' ? 'Sedang Dimasak' : 'Selesai',
+                              style: const TextStyle(fontSize: 10),
+                            ),
+                          ),
+                  ),
+                );
+              }),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
   // TAB KELOLA EVENT
   Widget _buildManageEventTab() {
     return Scaffold(
