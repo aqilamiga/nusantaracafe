@@ -125,7 +125,7 @@ class _AuthPageState extends State<AuthPage> {
             Expanded(
               child: Center(
                 child: Image.asset(
-                  'assets/logo.jpg',
+                  'logo.jpg',
                   height: 100,
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => const Icon(
