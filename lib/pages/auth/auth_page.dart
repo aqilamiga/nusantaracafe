@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../theme/app_theme.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -31,7 +32,6 @@ class _AuthPageState extends State<AuthPage> {
   @override
   void initState() {
     super.initState();
-    // 2. Inisialisasi AuthService aman di sini
     _authService = AuthService();
   }
 
@@ -53,7 +53,6 @@ class _AuthPageState extends State<AuthPage> {
 
     try {
       if (_isLoginMode) {
-        // LOGIN MENGGUNAKAN USERNAME
         await _authService.loginWithUsername(
           username: _usernameController.text.trim(),
           password: _passwordController.text.trim(),
@@ -63,10 +62,9 @@ class _AuthPageState extends State<AuthPage> {
           Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
         }
       } else {
-        // REGISTER MENGGUNAKAN USERNAME SEBENARNYA
         await _authService.registerWithEmail(
           name: _nameController.text.trim(),
-          username: _usernameController.text.trim(), // Gunakan controller username khusus
+          username: _usernameController.text.trim(),
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
           role: _selectedRole,
@@ -104,188 +102,293 @@ class _AuthPageState extends State<AuthPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_isLoginMode ? 'Masuk Akun' : 'Daftar Akun Baru'),
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Icon(
-                  Icons.local_cafe_rounded,
-                  size: 72,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(height: 12),
-                Text(
+      backgroundColor: AppTheme.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Top Bar Header Title
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Center(
+                child: Text(
                   '1 Nusantara Cafe',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  style: TextStyle(
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryDark,
                   ),
                 ),
-                const SizedBox(height: 28),
-                TextFormField(
-                  controller: _usernameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nickname',
-                    prefixIcon: Icon(Icons.alternate_email_rounded),
-                    border: OutlineInputBorder(),
-                    hintText: 'contoh: kanyewestlover911',
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Silakan masukkan username';
-                    }
-                    if (value.contains(' ')) {
-                      return 'Nickname tidak boleh mengandung spasi';
-                    }
-                    if (value.length < 4) {
-                      return 'Nickname minimal 4 karakter';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // 2. Field Khusus Pendaftaran (HANYA TAMPIL SAAT REGISTER)
-                if (!_isLoginMode) ...[
-                  // Input Nama Lengkap
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Nama Lengkap',
-                      prefixIcon: Icon(Icons.person_outline),
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Silakan masukkan nama Anda';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Input Email (DIPINDAHKAN KE SINI)
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.email_outlined),
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) => value == null || !value.contains('@')
-                        ? 'Email tidak valid'
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Dropdown Pilihan Role
-                  DropdownButtonFormField<String>(
-                    value: _selectedRole,
-                    decoration: const InputDecoration(
-                      labelText: 'Pilih Role Akun',
-                      prefixIcon: Icon(Icons.badge_outlined),
-                      border: OutlineInputBorder(),
-                    ),
-                    items: _roleOptions.map((role) {
-                      return DropdownMenuItem<String>(
-                        value: role['value'],
-                        child: Text(role['label']!),
-                      );
-                    }).toList(),
-                    onChanged: (newValue) {
-                      if (newValue != null) {
-                        setState(() {
-                          _selectedRole = newValue;
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                // 3. Field Kata Sandi (Tampil di Mode Login & Register)
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Kata Sandi',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Silakan masukkan kata sandi';
-                    }
-                    if (value.length < 6) {
-                      return 'Kata sandi minimal 6 karakter';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 24),
-
-                // Tombol Submit
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _submitForm,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(
-                          _isLoginMode ? 'MASUK' : 'DAFTAR SEKARANG',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                ),
-                const SizedBox(height: 12),
-
-                // Toggle Login / Register
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      _isLoginMode ? 'Belum punya akun?' : 'Sudah punya akun?',
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _isLoginMode = !_isLoginMode;
-                          _isLoading = false;
-                          _formKey.currentState?.reset();
-                        });
-                      },
-                      child: Text(_isLoginMode ? 'Daftar' : 'Masuk'),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
-          ),
+
+            // Logo Kopi Assets (Figma Visual)
+            Expanded(
+              child: Center(
+                child: Image.asset(
+                  'assets/logo.jpg',
+                  height: 100,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.local_cafe_rounded,
+                    size: 80,
+                    color: AppTheme.primaryDark,
+                  ),
+                ),
+              ),
+            ),
+
+            // Form Sheet Melengkung (Visual Figma)
+            Container(
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+              child: SingleChildScrollView(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _isLoginMode ? 'Masuk Akun' : 'Daftar Akun Baru',
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textDark,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Input Username / Nickname (Fungsi Asli)
+                      const Text(
+                        'Nickname / Username',
+                        style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _usernameController,
+                        decoration: InputDecoration(
+                          hintText: 'contoh: kanyewestlover911',
+                          fillColor: AppTheme.fieldBg,
+                          filled: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 14,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Silakan masukkan username';
+                          }
+                          if (value.contains(' ')) {
+                            return 'Nickname tidak boleh mengandung spasi';
+                          }
+                          if (value.length < 4) {
+                            return 'Nickname minimal 4 karakter';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Field Khusus Register (Fungsi Asli)
+                      if (!_isLoginMode) ...[
+                        const Text(
+                          'Nama Lengkap',
+                          style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _nameController,
+                          decoration: InputDecoration(
+                            hintText: 'Masukkan nama lengkap',
+                            fillColor: AppTheme.fieldBg,
+                            filled: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 14,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Silakan masukkan nama Anda';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 14),
+
+                        const Text(
+                          'Email',
+                          style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: InputDecoration(
+                            hintText: 'Masukkan email valid',
+                            fillColor: AppTheme.fieldBg,
+                            filled: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 14,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          validator: (value) => value == null || !value.contains('@')
+                              ? 'Email tidak valid'
+                              : null,
+                        ),
+                        const SizedBox(height: 14),
+
+                        const Text(
+                          'Pilih Role Akun',
+                          style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                        ),
+                        const SizedBox(height: 6),
+                        DropdownButtonFormField<String>(
+                          value: _selectedRole,
+                          decoration: InputDecoration(
+                            fillColor: AppTheme.fieldBg,
+                            filled: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 14,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          items: _roleOptions.map((role) {
+                            return DropdownMenuItem<String>(
+                              value: role['value'],
+                              child: Text(role['label']!),
+                            );
+                          }).toList(),
+                          onChanged: (newValue) {
+                            if (newValue != null) {
+                              setState(() {
+                                _selectedRole = newValue;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+
+                      // Input Kata Sandi (Fungsi Asli)
+                      const Text(
+                        'Kata Sandi',
+                        style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        decoration: InputDecoration(
+                          hintText: 'Masukkan kata sandi',
+                          fillColor: AppTheme.fieldBg,
+                          filled: true,
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: AppTheme.textMuted,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 14,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Silakan masukkan kata sandi';
+                          }
+                          if (value.length < 6) {
+                            return 'Kata sandi minimal 6 karakter';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Tombol Submit Utama (Fungsi Asli)
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _submitForm,
+                          child: _isLoading
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(
+                                  _isLoginMode ? 'MASUK' : 'DAFTAR SEKARANG',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Toggle Switch Mode (Fungsi Asli)
+                      Center(
+                        child: TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _isLoginMode = !_isLoginMode;
+                              _isLoading = false;
+                              _formKey.currentState?.reset();
+                            });
+                          },
+                          child: Text(
+                            _isLoginMode
+                                ? 'Belum punya akun? Daftar'
+                                : 'Sudah punya akun? Masuk',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryDark,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
