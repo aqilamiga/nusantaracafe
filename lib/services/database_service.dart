@@ -108,33 +108,43 @@ class DatabaseService {
   // ==========================================
 
   // Buat Pesanan Baru (Customer / User / Kasir)
-  Future<String> createOrder({
-    required String userId,
-    required String userName,
-    required String tableNumber,
-    required List<Map<String, dynamic>> items,
-    required int totalPrice,
-    required String paymentMethod,
-  }) async {
-    try {
-      DocumentReference docRef = await _firestore.collection('orders').add({
-        'userId': userId,
-        'userName': userName,
-        'tableNumber': tableNumber,
-        'items': items,
-        'totalPrice': totalPrice,
-        'paymentStatus': 'paid', // 'pending' | 'paid' | 'failed'
-        'orderStatus':
-            'cooking', // 'pending' | 'cooking' | 'ready' | 'completed' | 'cancelled'
-        'paymentMethod': paymentMethod,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+Future<String> createOrder({
+  required String userId,
+  required String userName,
+  required String tableNumber,
+  required List<Map<String, dynamic>> items,
+  required int totalPrice,
+  required String paymentMethod,
+}) async {
+  try {
+    DocumentReference docRef = await _firestore.collection('orders').add({
+      'userId': userId,
+      'userName': userName,
+      'tableNumber': tableNumber,
+      'items': items,
+      'totalPrice': totalPrice,
+      'paymentStatus': 'pending', // Ubah dari 'paid' ke 'pending'
+      'orderStatus': 'pending',   // UBAH: Awal pesanan statusnya 'pending' untuk Kasir
+      'paymentMethod': paymentMethod,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
 
-      return docRef.id;
-    } catch (e) {
-      rethrow;
-    }
+    return docRef.id;
+  } catch (e) {
+    rethrow;
   }
+}
+
+Future<void> confirmPaymentAndSendToKitchen(String orderId) async {
+  try {
+    await _firestore.collection('orders').doc(orderId).update({
+      'paymentStatus': 'paid',
+      'orderStatus': 'cooking', // Mengubah status agar pesanan masuk ke layar Dapur
+    });
+  } catch (e) {
+    rethrow;
+  }
+}
 
   // Stream Memantau Antrean Pesanan untuk Layar Dapur & Kasir
 Stream<List<OrderModel>> getActiveOrders() {
@@ -257,10 +267,8 @@ Stream<List<OrderModel>> getActiveOrders() {
   }
 
   // Di dalam database_service.dart
-Future<void> processOrderAndDeductStock(
-    String orderId, List<dynamic> rawItems) async {
+Future<void> processOrderAndDeductStock(String orderId, List<dynamic> rawItems) async {
   try {
-    // Gunakan Transaction agar kalkulasi stok aman & atomic
     await _firestore.runTransaction((transaction) async {
       for (var rawItem in rawItems) {
         final item = Map<String, dynamic>.from(rawItem as Map);
@@ -269,7 +277,7 @@ Future<void> processOrderAndDeductStock(
 
         if (menuId.isEmpty) continue;
 
-        // 1. Ambil data resep dari menu
+        // 1. Ambil data menu
         DocumentSnapshot menuDoc = await transaction.get(
           _firestore.collection('menus').doc(menuId),
         );
@@ -279,24 +287,36 @@ Future<void> processOrderAndDeductStock(
         final menuData = menuDoc.data() as Map<String, dynamic>?;
         final List recipe = menuData?['recipe'] ?? [];
 
-        // 2. Kurangi setiap bahan baku sesuai resep
+        // 2. Potong stok setiap bahan baku
         for (var recipeItem in recipe) {
           final recipeMap = Map<String, dynamic>.from(recipeItem as Map);
           final String ingredientId = recipeMap['ingredientId'] ?? '';
-          final double amountPerUnit = (recipeMap['amount'] as num?)?.toDouble() ?? 0.0;
+          
+          // UBAH DARI 'amount' KE 'amountNeeded' SESUAI MODEL RESEP
+          final double amountPerUnit = (recipeMap['amountNeeded'] as num?)?.toDouble() ?? 
+                                      (recipeMap['amount'] as num?)?.toDouble() ?? 0.0;
+                                      
+          final String recipeUnit = recipeMap['unit'] ?? '';
           final double totalAmountNeeded = amountPerUnit * quantityOrdered;
 
           if (ingredientId.isEmpty) continue;
 
-          DocumentReference ingredientRef =
-              _firestore.collection('ingredients').doc(ingredientId);
+          DocumentReference ingredientRef = _firestore.collection('ingredients').doc(ingredientId);
           DocumentSnapshot ingredientDoc = await transaction.get(ingredientRef);
 
           if (ingredientDoc.exists) {
             final ingredientData = ingredientDoc.data() as Map<String, dynamic>?;
             final double currentStock = (ingredientData?['stock'] as num?)?.toDouble() ?? 0.0;
+            final String stockUnit = ingredientData?['unit'] ?? '';
 
-            double newStock = currentStock - totalAmountNeeded;
+            // Hitung konversi satuan jika berbeda (misal gr ke kg)
+            double convertedDeductAmount = convertToStockUnit(
+              recipeAmount: totalAmountNeeded,
+              recipeUnit: recipeUnit,
+              stockUnit: stockUnit,
+            );
+
+            double newStock = currentStock - convertedDeductAmount;
             if (newStock < 0) newStock = 0; // Cegah stok minus
 
             transaction.update(ingredientRef, {'stock': newStock});
@@ -305,7 +325,7 @@ Future<void> processOrderAndDeductStock(
       }
     });
   } catch (e) {
-    rethrow; // Lempar error agar bisa ditangkap oleh try-catch UI
+    rethrow;
   }
 }
 

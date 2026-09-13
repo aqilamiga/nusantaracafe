@@ -491,7 +491,7 @@ Widget _buildKitchenOrdersTab() {
   return StreamBuilder<QuerySnapshot>(
     stream: FirebaseFirestore.instance
         .collection('orders')
-        .where('orderStatus', whereIn: ['cooking', 'pending'])
+        .where('orderStatus', isEqualTo: 'cooking')
         .orderBy('createdAt', descending: true)
         .snapshots(),
     builder: (context, snapshot) {
