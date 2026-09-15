@@ -266,8 +266,23 @@ Stream<List<OrderModel>> getActiveOrders() {
     }
   }
 
+Future<void> restockIngredient({
+  required String ingredientId,
+  required double additionalStock,
+}) async {
+  try {
+    await _firestore.collection('ingredients').doc(ingredientId).update({
+      'stock': FieldValue.increment(additionalStock),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    rethrow;
+  }
+}
+
   // Di dalam database_service.dart
-Future<void> processOrderAndDeductStock(String orderId, List<dynamic> rawItems) async {
+Future<void> processOrderAndDeductStock(
+    String orderId, List<dynamic> rawItems) async {
   try {
     await _firestore.runTransaction((transaction) async {
       for (var rawItem in rawItems) {
@@ -277,7 +292,7 @@ Future<void> processOrderAndDeductStock(String orderId, List<dynamic> rawItems) 
 
         if (menuId.isEmpty) continue;
 
-        // 1. Ambil data menu
+        // Ambil data menu dari Firestore
         DocumentSnapshot menuDoc = await transaction.get(
           _firestore.collection('menus').doc(menuId),
         );
@@ -287,29 +302,33 @@ Future<void> processOrderAndDeductStock(String orderId, List<dynamic> rawItems) 
         final menuData = menuDoc.data() as Map<String, dynamic>?;
         final List recipe = menuData?['recipe'] ?? [];
 
-        // 2. Potong stok setiap bahan baku
+        // Potong setiap bahan baku yang ada pada resep
         for (var recipeItem in recipe) {
           final recipeMap = Map<String, dynamic>.from(recipeItem as Map);
           final String ingredientId = recipeMap['ingredientId'] ?? '';
-          
-          // UBAH DARI 'amount' KE 'amountNeeded' SESUAI MODEL RESEP
-          final double amountPerUnit = (recipeMap['amountNeeded'] as num?)?.toDouble() ?? 
-                                      (recipeMap['amount'] as num?)?.toDouble() ?? 0.0;
-                                      
+
+          // Fleksibilitas pembacaan field takaran (amountNeeded atau amount)
+          final double amountPerUnit = (recipeMap['amountNeeded'] as num?)?.toDouble() ??
+              (recipeMap['amount'] as num?)?.toDouble() ??
+              0.0;
+
           final String recipeUnit = recipeMap['unit'] ?? '';
           final double totalAmountNeeded = amountPerUnit * quantityOrdered;
 
-          if (ingredientId.isEmpty) continue;
+          if (ingredientId.isEmpty || totalAmountNeeded <= 0) continue;
 
-          DocumentReference ingredientRef = _firestore.collection('ingredients').doc(ingredientId);
+          DocumentReference ingredientRef =
+              _firestore.collection('ingredients').doc(ingredientId);
           DocumentSnapshot ingredientDoc = await transaction.get(ingredientRef);
 
           if (ingredientDoc.exists) {
-            final ingredientData = ingredientDoc.data() as Map<String, dynamic>?;
-            final double currentStock = (ingredientData?['stock'] as num?)?.toDouble() ?? 0.0;
+            final ingredientData =
+                ingredientDoc.data() as Map<String, dynamic>?;
+            final double currentStock =
+                (ingredientData?['stock'] as num?)?.toDouble() ?? 0.0;
             final String stockUnit = ingredientData?['unit'] ?? '';
 
-            // Hitung konversi satuan jika berbeda (misal gr ke kg)
+            // Konversi satuan jika beda (misal: gram ke kg, mL ke L)
             double convertedDeductAmount = convertToStockUnit(
               recipeAmount: totalAmountNeeded,
               recipeUnit: recipeUnit,
@@ -317,7 +336,7 @@ Future<void> processOrderAndDeductStock(String orderId, List<dynamic> rawItems) 
             );
 
             double newStock = currentStock - convertedDeductAmount;
-            if (newStock < 0) newStock = 0; // Cegah stok minus
+            if (newStock < 0) newStock = 0; // Mencegah nilai minus
 
             transaction.update(ingredientRef, {'stock': newStock});
           }

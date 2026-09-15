@@ -17,19 +17,6 @@ class _DapurDashboardState extends State<DapurDashboard> {
   final AuthService _authService = AuthService();
   final DatabaseService _dbService = DatabaseService();
 
-  // Pilihan Satuan Baku
-  final List<String> _units = [
-    'kg',
-    'g/gr',
-    'mL',
-    'L',
-    'bungkus',
-    'buah',
-    'dus',
-    'kaleng',
-    'botol',
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -66,120 +53,266 @@ class _DapurDashboardState extends State<DapurDashboard> {
       );
     }
   }
-
-  // DIALOG TAMBAH BAHAN MAKANAN
-  void _showAddIngredientDialog() {
-    final formKey = GlobalKey<FormState>();
-    final nameController = TextEditingController();
-    final stockController = TextEditingController();
-    String selectedUnit = 'kg';
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Tambah Bahan Makanan'),
-              content: SingleChildScrollView(
-                child: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextFormField(
-                        controller: nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Nama Bahan',
-                          hintText: 'contoh: Susu UHT / Bijikopi',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Wajib diisi'
-                            : null,
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: stockController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Stok Awal',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Wajib diisi'
-                            : null,
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        value: selectedUnit,
-                        decoration: const InputDecoration(
-                          labelText: 'Satuan',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: _units.map((unit) {
-                          return DropdownMenuItem(
-                            value: unit,
-                            child: Text(unit),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null)
-                            setDialogState(() => selectedUnit = val);
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Batal'),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (formKey.currentState!.validate()) {
-                      try {
-                        await _dbService.addIngredient(
-                          name: nameController.text.trim(),
-                          stock: double.parse(stockController.text.trim()),
-                          unit: selectedUnit,
-                        );
-                        if (mounted) {
-                          Navigator.pop(dialogContext);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Bahan makanan berhasil ditambahkan!',
-                              ),
-                            ),
-                          );
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                e.toString().replaceAll('Exception: ', ''),
-                              ),
-                              backgroundColor: Colors.redAccent,
-                            ),
-                          );
-                        }
-                      }
-                    }
-                  },
-                  child: const Text('Simpan'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+  
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 3, // 1. Stok Bahan Baku, 2. Pesanan Masuk (KDS)
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Dashboard Dapur'),
+          backgroundColor: Colors.orange.shade800,
+          foregroundColor: Colors.white,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.logout),
+              onPressed: () async => await _authService.logout(),
+            ),
+          ],
+          bottom: const TabBar(
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            indicatorColor: Colors.amber,
+            tabs: [
+              Tab(icon: Icon(Icons.soup_kitchen), text: 'Pesanan Masuk'),
+              Tab(icon: Icon(Icons.inventory_2), text: 'Stok Bahan Baku'),
+              Tab(icon: Icon(Icons.restaurant_menu), text: 'Kelola Menu'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _buildKitchenOrdersTab(), // Tab Pesanan Masuk KDS
+            _buildIngredientsTab(), // Tab Stok Bahan Makanan
+            _buildManageMenuTab(), // Tab Tambah Menu
+          ],
+        ),
+      ),
     );
   }
+  // DIALOG TAMBAH BAHAN MAKANAN
+void _showAddOrRestockIngredientDialog() {
+  IngredientModel? selectedIngredient;
+  final packCountController = TextEditingController();
+  final volumePerPackController = TextEditingController();
+  double calculatedTotal = 0.0;
 
+  final newNameController = TextEditingController();
+  final newStockController = TextEditingController();
+  String selectedBaseUnit = 'mL'; // Default Satuan Dasar
+
+  showDialog(
+    context: context,
+    builder: (dialogContext) {
+      return DefaultTabController(
+        length: 2,
+        child: StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              title: const TabBar(
+                labelColor: Colors.orange,
+                unselectedLabelColor: Colors.grey,
+                tabs: [
+                  Tab(text: 'Restock Stok Ada'),
+                  Tab(text: 'Bahan Baku Baru'),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: TabBarView(
+                  children: [
+                    // TAB 1: RESTOCK BAHAN DENGAN KALKULATOR KEMASAN
+                    StreamBuilder<List<IngredientModel>>(
+                      stream: _dbService.getIngredients(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        final ingredients = snapshot.data ?? [];
+                        if (ingredients.isEmpty) {
+                          return const Center(
+                            child: Text('Belum ada bahan baku. Buat di tab Bahan Baku Baru.'),
+                          );
+                        }
+
+                        void recalculateTotal() {
+                          final count = double.tryParse(packCountController.text.trim()) ?? 0.0;
+                          final vol = double.tryParse(volumePerPackController.text.trim()) ?? 1.0;
+                          setModalState(() {
+                            calculatedTotal = count * vol;
+                          });
+                        }
+
+                        return SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<IngredientModel>(
+                                decoration: const InputDecoration(
+                                  labelText: 'Pilih Bahan Baku',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: ingredients.map((ing) {
+                                  return DropdownMenuItem(
+                                    value: ing,
+                                    child: Text('${ing.name} (Stok: ${ing.stock} ${ing.unit})'),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  setModalState(() {
+                                    selectedIngredient = val;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                controller: packCountController,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'Jumlah Kemasan / Bungkus',
+                                  hintText: 'contoh: 2 (dus/bungkus)',
+                                  border: OutlineInputBorder(),
+                                ),
+                                onChanged: (_) => recalculateTotal(),
+                              ),
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                controller: volumePerPackController,
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  labelText: 'Isi per Kemasan',
+                                  hintText: 'contoh: 1000',
+                                  suffixText: selectedIngredient?.unit ?? 'mL/g',
+                                  border: const OutlineInputBorder(),
+                                ),
+                                onChanged: (_) => recalculateTotal(),
+                              ),
+                              const SizedBox(height: 12),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Total Stok Bertambah: $calculatedTotal ${selectedIngredient?.unit ?? ""}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.orange.shade900,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: () async {
+                                    if (selectedIngredient != null && calculatedTotal > 0) {
+                                      await _dbService.restockIngredient(
+                                        ingredientId: selectedIngredient!.id,
+                                        additionalStock: calculatedTotal,
+                                      );
+                                      if (mounted) {
+                                        Navigator.pop(dialogContext);
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Berhasil menambahkan $calculatedTotal ${selectedIngredient!.unit} ke ${selectedIngredient!.name}!',
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('Simpan Tambah Stok'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+
+                    // TAB 2: BUAT BAHAN BAKU BARU (STANDARDISASI BASE UNIT)
+                    SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: newNameController,
+                            decoration: const InputDecoration(
+                              labelText: 'Nama Bahan Baru',
+                              hintText: 'contoh: Susu UHT / Biji Kopi',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: newStockController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Stok Awal',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            value: selectedBaseUnit,
+                            decoration: const InputDecoration(
+                              labelText: 'Satuan Standar (Base Unit)',
+                              helperText: 'Gunakan mL untuk cairan dan gram/g untuk massa',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: ['mL', 'g/gr', 'kg', 'L', 'pcs', 'buah']
+                                .map((u) => DropdownMenuItem(value: u, child: Text(u)))
+                                .toList(),
+                            onChanged: (val) {
+                              if (val != null) selectedBaseUnit = val;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                if (newNameController.text.isNotEmpty &&
+                                    newStockController.text.isNotEmpty) {
+                                  await _dbService.addIngredient(
+                                    name: newNameController.text.trim(),
+                                    stock: double.parse(newStockController.text.trim()),
+                                    unit: selectedBaseUnit,
+                                  );
+                                  if (mounted) {
+                                    Navigator.pop(dialogContext);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Bahan baru berhasil dibuat!'),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                              child: const Text('Simpan Bahan Baru'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    },
+  );
+}
   // DIALOG TAMBAH MENU (Sama seperti Kasir)
   void _showAddMenuDialog() {
     final formKey = GlobalKey<FormState>();
@@ -359,12 +492,24 @@ class _DapurDashboardState extends State<DapurDashboard> {
     );
   }
 
-  void _showSelectIngredientModal(
-    BuildContext context,
-    Function(RecipeItem) onSelected,
-  ) {
+void _showSelectIngredientModal(BuildContext context, Function(RecipeItem) onSelected) {
     IngredientModel? selectedIngredient;
     final amountController = TextEditingController();
+    String selectedRecipeUnit = 'mL'; // Default satuan resep
+
+    // List pilihan satuan fleksibel untuk resep
+    final List<String> availableUnits = [
+      'mL',
+      'L',
+      'g/gr',
+      'kg',
+      'pcs',
+      'buah',
+      'bungkus',
+      'sdm',
+      'sdt',
+      'shot',
+    ];
 
     showDialog(
       context: context,
@@ -372,7 +517,7 @@ class _DapurDashboardState extends State<DapurDashboard> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return AlertDialog(
-              title: const Text('Pilih Bahan & Kuantitas'),
+              title: const Text('Pilih Bahan & Kuantitas Resep'),
               content: StreamBuilder<List<IngredientModel>>(
                 stream: _dbService.getIngredients(),
                 builder: (context, snapshot) {
@@ -387,35 +532,69 @@ class _DapurDashboardState extends State<DapurDashboard> {
                     );
                   }
 
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      DropdownButtonFormField<IngredientModel>(
-                        decoration: const InputDecoration(
-                          labelText: 'Pilih Bahan Baku',
-                          border: OutlineInputBorder(),
+                  return SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // 1. DROPDOWN PILIH BAHAN BAKU
+                        DropdownButtonFormField<IngredientModel>(
+                          decoration: const InputDecoration(
+                            labelText: 'Pilih Bahan Baku',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: ingredients.map((ing) {
+                            return DropdownMenuItem(
+                              value: ing,
+                              child: Text('${ing.name} (Stok: ${ing.unit})'),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            setModalState(() {
+                              selectedIngredient = val;
+                              if (val != null && val.unit.isNotEmpty) {
+                                // Otomatis set unit resep mengikuti unit stok jika ada di daftar
+                                if (availableUnits.contains(val.unit)) {
+                                  selectedRecipeUnit = val.unit;
+                                }
+                              }
+                            });
+                          },
                         ),
-                        items: ingredients.map((ing) {
-                          return DropdownMenuItem(
-                            value: ing,
-                            child: Text('${ing.name} (${ing.unit})'),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          setModalState(() => selectedIngredient = val);
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: amountController,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: 'Jumlah Dibutuhkan per Porsi',
-                          suffixText: selectedIngredient?.unit ?? '',
-                          border: const OutlineInputBorder(),
+                        const SizedBox(height: 12),
+
+                        // 2. INPUT JUMLAH DIBUTUHKAN PER PORSI
+                        TextFormField(
+                          controller: amountController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Jumlah per Porsi',
+                            hintText: 'contoh: 200',
+                            border: OutlineInputBorder(),
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+
+                        // 3. DROPDOWN GANTI SATUAN RESEP (BISA DIGANTI BEBAS)
+                        DropdownButtonFormField<String>(
+                          value: availableUnits.contains(selectedRecipeUnit)
+                              ? selectedRecipeUnit
+                              : availableUnits.first,
+                          decoration: const InputDecoration(
+                            labelText: 'Satuan Resep',
+                            helperText: 'Bisa disesuaikan (misal: mL, g, pcs)',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: availableUnits.map((u) {
+                            return DropdownMenuItem(value: u, child: Text(u));
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setModalState(() => selectedRecipeUnit = val);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
                   );
                 },
               ),
@@ -434,10 +613,17 @@ class _DapurDashboardState extends State<DapurDashboard> {
                         amountNeeded: double.parse(
                           amountController.text.trim(),
                         ),
-                        unit: selectedIngredient!.unit,
+                        unit: selectedRecipeUnit, // Menggunakan satuan yang dipilih user
                       );
                       onSelected(item);
                       Navigator.pop(ctx);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Pilih bahan baku dan isi jumlahnya!'),
+                          backgroundColor: Colors.redAccent,
+                        ),
+                      );
                     }
                   },
                   child: const Text('Tambahkan'),
@@ -447,43 +633,6 @@ class _DapurDashboardState extends State<DapurDashboard> {
           },
         );
       },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3, // 1. Stok Bahan Baku, 2. Pesanan Masuk (KDS)
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Dashboard Dapur'),
-          backgroundColor: Colors.orange.shade800,
-          foregroundColor: Colors.white,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: () async => await _authService.logout(),
-            ),
-          ],
-          bottom: const TabBar(
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            indicatorColor: Colors.amber,
-            tabs: [
-              Tab(icon: Icon(Icons.soup_kitchen), text: 'Pesanan Masuk'),
-              Tab(icon: Icon(Icons.inventory_2), text: 'Stok Bahan Baku'),
-              Tab(icon: Icon(Icons.restaurant_menu), text: 'Kelola Menu'),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            _buildKitchenOrdersTab(), // Tab Pesanan Masuk KDS
-            _buildIngredientsTab(), // Tab Stok Bahan Makanan
-            _buildManageMenuTab(), // Tab Tambah Menu
-          ],
-        ),
-      ),
     );
   }
 
@@ -627,15 +776,14 @@ Widget _buildKitchenOrdersTab() {
   );
 }
 
-  // TAB 1: INVENTARIS BAHAN BAKU
   Widget _buildIngredientsTab() {
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddIngredientDialog,
+        onPressed: _showAddOrRestockIngredientDialog,
         backgroundColor: Colors.orange.shade800,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
-        label: const Text('Tambah Bahan'),
+        label: const Text('Kelola Stok Bahan'),
       ),
       body: StreamBuilder<List<IngredientModel>>(
         stream: _dbService.getIngredients(),
@@ -681,8 +829,7 @@ Widget _buildKitchenOrdersTab() {
     );
   }
 
-  // TAB 2: KELOLA MENU
-  Widget _buildManageMenuTab() {
+Widget _buildManageMenuTab() {
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddMenuDialog,
@@ -713,24 +860,267 @@ Widget _buildKitchenOrdersTab() {
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
+                  leading: _buildMenuImage(menu.imageUrl),
                   title: Text(
                     menu.name,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text('${menu.category} • Rp ${menu.price}'),
-                  trailing: Switch(
-                    value: menu.isAvailable,
-                    activeThumbColor: Colors.green,
-                    onChanged: (bool value) async {
-                      await _dbService.updateMenuAvailability(menu.id, value);
-                    },
-                  ),
+                  trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                  // EVENT TAP UNTUK BULA DETAIL & EDIT RESEP
+                  onTap: () {
+                    _showMenuDetailAndEditRecipeDialog(menu);
+                  },
                 ),
               );
             },
           );
         },
       ),
+    );
+  }
+
+void _showMenuDetailAndEditRecipeDialog(MenuModel menu) {
+    // Controller untuk edit informasi menu
+    final nameController = TextEditingController(text: menu.name);
+    final priceController = TextEditingController(text: menu.price.toString());
+    final descriptionController = TextEditingController(text: menu.description);
+    String selectedCategory = menu.category;
+
+    // Duplikasi list resep agar bisa diedit secara lokal di dialog
+    List<RecipeItem> currentRecipe = List.from(menu.recipe);
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Row(
+                children: [
+                  const Icon(Icons.edit_note, color: Colors.orange),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Edit Menu: ${menu.name}',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // --- SECTION EDIT INFORMASI UTAMA MENU ---
+                      const Text(
+                        'Informasi Menu',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Edit Nama Menu
+                      TextFormField(
+                        controller: nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Nama Menu',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Edit Harga Menu & Kategori (Dalam Row)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: priceController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Harga (Rp)',
+                                border: OutlineInputBorder(),
+                                prefixText: 'Rp ',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: ['Minuman', 'Makanan', 'Snack', 'Dessert']
+                                      .contains(selectedCategory)
+                                  ? selectedCategory
+                                  : 'Minuman',
+                              decoration: const InputDecoration(
+                                labelText: 'Kategori',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: ['Minuman', 'Makanan', 'Snack', 'Dessert']
+                                  .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                                  .toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setDialogState(() => selectedCategory = val);
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Edit Deskripsi Menu
+                      TextFormField(
+                        controller: descriptionController,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Deskripsi Singkat',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Divider(thickness: 1.5),
+
+                      // --- SECTION RESEP BAHAN BAKU ---
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Resep Bahan Baku:',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          TextButton.icon(
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('Tambah Bahan'),
+                            onPressed: () {
+                              _showSelectIngredientModal(context, (newItem) {
+                                setDialogState(() {
+                                  currentRecipe.add(newItem);
+                                });
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+
+                      // Daftar Resep Saat Ini
+                      if (currentRecipe.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            'Belum ada resep bahan baku yang terikat.',
+                            style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+                          ),
+                        )
+                      else
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: currentRecipe.length,
+                          itemBuilder: (ctx, idx) {
+                            final item = currentRecipe[idx];
+                            return ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.kitchen, size: 20, color: Colors.brown),
+                              title: Text(
+                                item.ingredientName,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Text('${item.amountNeeded} ${item.unit} per porsi'),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                onPressed: () {
+                                  setDialogState(() {
+                                    currentRecipe.removeAt(idx);
+                                  });
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Batal'),
+                ),
+                ElevatedButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          if (nameController.text.trim().isEmpty ||
+                              priceController.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Nama dan Harga tidak boleh kosong!'),
+                                backgroundColor: Colors.redAccent,
+                              ),
+                            );
+                            return;
+                          }
+
+                          setDialogState(() => isSaving = true);
+                          try {
+                            final int parsedPrice =
+                                int.tryParse(priceController.text.trim()) ?? menu.price;
+
+                            // Update data menu & resep di Firestore
+                            await FirebaseFirestore.instance
+                                .collection('menus')
+                                .doc(menu.id)
+                                .update({
+                              'name': nameController.text.trim(),
+                              'price': parsedPrice,
+                              'category': selectedCategory,
+                              'description': descriptionController.text.trim(),
+                              'recipe': currentRecipe.map((e) => e.toMap()).toList(),
+                            });
+
+                            if (mounted) {
+                              Navigator.pop(dialogContext);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Menu dan resep berhasil diperbarui!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() => isSaving = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Gagal memperbarui menu: $e')),
+                              );
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange.shade800,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Simpan Perubahan'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
