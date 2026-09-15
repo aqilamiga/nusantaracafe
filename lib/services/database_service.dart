@@ -384,5 +384,64 @@ Future<void> processOrderAndDeductStock(
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
+
+  Stream<bool> isUserJoinedEvent(String eventId, String userId) {
+  return _firestore
+      .collection('events')
+      .doc(eventId)
+      .collection('participants')
+      .doc(userId)
+      .snapshots()
+      .map((snapshot) => snapshot.exists);
+}
+
+Future<void> joinEvent({
+  required String eventId,
+  required String userId,
+  required String userName,
+}) async {
+  try {
+    final eventRef = _firestore.collection('events').doc(eventId);
+    final participantRef = eventRef.collection('participants').doc(userId);
+
+    await _firestore.runTransaction((transaction) async {
+      DocumentSnapshot eventDoc = await transaction.get(eventRef);
+      if (!eventDoc.exists) throw Exception('Event tidak ditemukan');
+
+      final data = eventDoc.data() as Map<String, dynamic>;
+      int currentCount = data['registeredUsersCount'] ?? 0;
+      int maxQuota = data['maxQuota'] ?? data['quota'] ?? 0;
+
+      if (currentCount >= maxQuota) {
+        throw Exception('Kuota event sudah penuh!');
+      }
+
+      // 1. Simpan data peserta di sub-koleksi participants
+      transaction.set(participantRef, {
+        'userId': userId,
+        'userName': userName,
+        'joinedAt': FieldValue.serverTimestamp(),
+      });
+
+      // 2. Tambah jumlah peserta terdaftar
+      transaction.update(eventRef, {
+        'registeredUsersCount': FieldValue.increment(1),
+      });
+    });
+  } catch (e) {
+    rethrow;
+  }
+}
+
+// Stream untuk Kasir melihat daftar peserta event
+Stream<List<Map<String, dynamic>>> getEventParticipants(String eventId) {
+  return _firestore
+      .collection('events')
+      .doc(eventId)
+      .collection('participants')
+      .orderBy('joinedAt', descending: true)
+      .snapshots()
+      .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
+}
   
 }

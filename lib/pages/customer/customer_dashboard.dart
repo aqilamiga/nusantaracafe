@@ -351,13 +351,17 @@ Widget build(BuildContext context) {
     );
   }
 
-  Widget _buildEventCard(EventModel event, {required bool isExpired}) {
-    final formattedDate =
-        '${event.date.day}/${event.date.month}/${event.date.year} - ${event.date.hour.toString().padLeft(2, '0')}:${event.date.minute.toString().padLeft(2, '0')}';
+Widget _buildEventCard(EventModel event, {required bool isExpired}) {
+  final formattedDate =
+      '${event.date.day}/${event.date.month}/${event.date.year} - ${event.date.hour.toString().padLeft(2, '0')}:${event.date.minute.toString().padLeft(2, '0')}';
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: isExpired ? Colors.grey.shade100 : Colors.white,
+  return Card(
+    margin: const EdgeInsets.only(bottom: 12),
+    color: isExpired ? Colors.grey.shade100 : Colors.white,
+    child: InkWell(
+      onTap: widget.isGuest
+          ? () => _checkGuestAccess(() {}) // Alert login jika Guest menekan kartu event
+          : null,
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
@@ -421,30 +425,82 @@ Widget build(BuildContext context) {
                     '${event.registeredUsersCount}/${event.maxQuota} Kuota',
                   ),
                 ),
-                if (!isExpired)
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      openGoogleCalendar(
-                        title: event.title,
-                        description: event.description,
-                        startTime: event.date,
-                        endTime: event.date.add(const Duration(hours: 2)),
+
+                // LOGIKA TOMBOL EVENT BERDASARKAN ROLE (GUEST VS USER)
+                if (!isExpired && !widget.isGuest)
+                  StreamBuilder<bool>(
+                    stream: _dbService.isUserJoinedEvent(event.id, _getUserId()),
+                    builder: (context, snapshot) {
+                      final bool isJoined = snapshot.data ?? false;
+
+                      if (isJoined) {
+                        // JIKA SUDAH JOIN -> TOMBOL SIMPAN KE KALENDER
+                        return ElevatedButton.icon(
+                          onPressed: () {
+                            openGoogleCalendar(
+                              title: event.title,
+                              description: event.description,
+                              startTime: event.date,
+                              endTime: event.date.add(const Duration(hours: 2)),
+                            );
+                          },
+                          icon: const Icon(Icons.calendar_month, size: 18),
+                          label: const Text('Simpan ke Kalender'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                          ),
+                        );
+                      }
+
+                      // JIKA BELUM JOIN -> TOMBOL JOIN EVENT
+                      return ElevatedButton.icon(
+                        onPressed: event.registeredUsersCount >= event.maxQuota
+                            ? null
+                            : () async {
+                                try {
+                                  await _dbService.joinEvent(
+                                    eventId: event.id,
+                                    userId: _getUserId(),
+                                    userName: _getUserName(),
+                                  );
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Berhasil Join Event!'),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Gagal Join: $e')),
+                                    );
+                                  }
+                                }
+                              },
+                        icon: const Icon(Icons.check_circle_outline, size: 18),
+                        label: Text(
+                          event.registeredUsersCount >= event.maxQuota
+                              ? 'Kuota Penuh'
+                              : 'Join Event',
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.brown,
+                          foregroundColor: Colors.white,
+                        ),
                       );
                     },
-                    icon: const Icon(Icons.calendar_month, size: 18),
-                    label: const Text('Simpan ke Kalender'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.brown,
-                      foregroundColor: Colors.white,
-                    ),
                   ),
               ],
             ),
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildCustomerOrdersTab() {
   final String currentUserId = _getUserId();

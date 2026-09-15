@@ -61,20 +61,14 @@ class _MainGatewayState extends State<MainGateway> {
             if (user == null) {
               return const CustomerDashboard(isGuest: false);
             }
-
-            print('DEBUG MainGateway: Role Terdeteksi -> "${user.role}"');
-
             // 4. Routing Berdasarkan Role
             switch (user.role.toLowerCase().trim()) {
               case 'kasir':
                 return const KasirDashboard();
-
               case 'dapur':
                 return const DapurDashboard();
-
               case 'admin':
                 return const KasirDashboard(); 
-
               case 'user':
               default:
                 return CustomerDashboard(isGuest: false, userData: user);
