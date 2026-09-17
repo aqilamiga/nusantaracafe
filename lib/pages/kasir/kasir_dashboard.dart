@@ -346,16 +346,32 @@ class _KasirDashboardState extends State<KasirDashboard> {
   Widget _buildKasirActionButton(String orderId, String orderStatus) {
     if (orderStatus == 'pending') {
       return ElevatedButton.icon(
-        onPressed: () async {
-          await _dbService.confirmPaymentAndSendToKitchen(orderId);
-        },
-        icon: const Icon(Icons.payments),
-        label: const Text('Konfirmasi & Kirim Dapur'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green,
-          foregroundColor: Colors.white,
-        ),
-      );
+  onPressed: () async {
+    try {
+      await _dbService.confirmPaymentAndSendToKitchen(orderId);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pesanan dikonfirmasi & stok dipotong!')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memotong stok: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  },
+  icon: const Icon(Icons.payments),
+  label: const Text('Konfirmasi & Kirim Dapur'),
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.green,
+    foregroundColor: Colors.white,
+  ),
+);
     } else if (orderStatus == 'ready') {
       return ElevatedButton.icon(
         onPressed: () async {

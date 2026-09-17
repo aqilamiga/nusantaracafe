@@ -11,6 +11,15 @@ class IngredientModel {
     required this.unit,
   });
 
+  String get normalizedUnit {
+    final u = unit.toLowerCase().trim();
+    if (u == 'g/gr' || u == 'gr' || u == 'gram') return 'g';
+    if (u == 'ml' || u == 'mililiter') return 'ml';
+    if (u == 'l' || u == 'liter') return 'l';
+    if (u == 'kg' || u == 'kilogram') return 'kg';
+    return u;
+  }
+
   factory IngredientModel.fromFirestore(Map<String, dynamic> data, String id) {
     return IngredientModel(
       id: id,

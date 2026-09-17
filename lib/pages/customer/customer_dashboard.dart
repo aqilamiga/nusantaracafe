@@ -5,9 +5,10 @@ import 'package:testing/pages/customer/cart_page.dart';
 import '../../models/menu_model.dart';
 import '../../models/event_model.dart';
 import '../../models/cart_item_model.dart';
+import '../../models/ingredient_model.dart';
 import '../../services/database_service.dart';
 import '../../services/auth_service.dart';
-import '../kasir/kasir_dashboard.dart'; // Mengakses fungsi openGoogleCalendar
+import '../kasir/kasir_dashboard.dart';
 
 class CustomerDashboard extends StatefulWidget {
   final bool isGuest;
@@ -235,46 +236,71 @@ Widget build(BuildContext context) {
 }
 
   // TAB 1: DAFTAR MENU
-  Widget _buildMenuTab() {
-    return StreamBuilder<List<MenuModel>>(
-      stream: _dbService.getMenus(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+Widget _buildMenuTab() {
+  return StreamBuilder<List<IngredientModel>>(
+    stream: _dbService.getIngredients(),
+    builder: (context, ingredientSnapshot) {
+      final ingredients = ingredientSnapshot.data ?? [];
 
-        final menus = snapshot.data ?? [];
-        if (menus.isEmpty) {
-          return const Center(child: Text('Belum ada menu yang tersedia.'));
-        }
+      return StreamBuilder<List<MenuModel>>(
+        stream: _dbService.getMenus(),
+        builder: (context, menuSnapshot) {
+          if (menuSnapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(12),
-          itemCount: menus.length,
-          itemBuilder: (context, index) {
-            final menu = menus[index];
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: _buildMenuImage(
-                  menu.imageUrl,
-                ), // Panggil helper gambar di sini
-                title: Text(
-                  menu.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+          final menus = menuSnapshot.data ?? [];
+          if (menus.isEmpty) {
+            return const Center(child: Text('Belum ada menu yang tersedia.'));
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: menus.length,
+            itemBuilder: (context, index) {
+              final menu = menus[index];
+              
+              // HITUNG STOK OTOMATIS BERDASARKAN BAHAN BAKU DAPUR
+              final int calculatedStock = menu.calculateAvailableStock(ingredients, _dbService);
+              final bool isOutOfStock = calculatedStock <= 0;
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                color: isOutOfStock ? Colors.grey.shade100 : Colors.white,
+                child: ListTile(
+                  leading: _buildMenuImage(menu.imageUrl),
+                  title: Text(
+                    menu.name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      decoration: isOutOfStock ? TextDecoration.lineThrough : null,
+                      color: isOutOfStock ? Colors.grey : Colors.black,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${menu.category} • Rp ${menu.price}\nStok Porsi: ${isOutOfStock ? "Habis" : calculatedStock}',
+                    style: TextStyle(
+                      color: isOutOfStock ? Colors.red.shade400 : Colors.grey.shade700,
+                    ),
+                  ),
+                  isThreeLine: true,
+                  trailing: ElevatedButton(
+                    onPressed: isOutOfStock ? null : () => _addToCart(menu),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isOutOfStock ? Colors.grey : Colors.brown,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: Text(isOutOfStock ? 'Habis' : 'Pesan'),
+                  ),
                 ),
-                subtitle: Text('${menu.category} • Rp ${menu.price}'),
-                trailing: ElevatedButton(
-                  onPressed: () => _addToCart(menu),
-                  child: const Text('Pesan'),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
+              );
+            },
+          );
+        },
+      );
+    },
+  );
+}
 
   // TAB 2: DAFTAR EVENT
   Widget _buildEventTab() {
